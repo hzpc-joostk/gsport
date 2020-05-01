@@ -289,7 +289,17 @@ def download_all(session):
             if status[1]:
                 current_processes -= 1
                 finished_processes += 1
-            rate = downloaded_bytes // (time.time() - start)
+
+            current = time.time()
+            delta = current - prev
+
+            if delta < 1.:
+                # wait a little longer before updating progress
+                continue
+
+            prev = current
+            rate = downloaded_bytes // (current - start)
+
             print("\r", str(round(downloaded_bytes / dl_sum * 100))+"%",
                   "Downloading", sizeofmetric_fmt(downloaded_bytes), "of",
                   sizeofmetric_fmt(dl_sum),
