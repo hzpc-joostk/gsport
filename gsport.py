@@ -295,31 +295,49 @@ def print_rec(dic, depth):
             print("├──", item["name"], 'Size: ', item['size'], 'bytes')
 
 
-def get_listing(session):
+def get_listing_recursive(session, project, root="."):
+    response = requests.get(f"{session.options.host}/data_api_recursive/{project}",
+                            cookies=session.cookies,
+                            params={"cd": root})
+
+    try:
+        return json.loads(response.text)["children"]
+    except json.decoder.JSONDecodeError:
+        raise GsportError("[get_listing] Error reading response:", response.text)
+
+
+def get_listing(session, project, dirs=False, root="."):
+    response = requests.get(f"{session.options.host}/data_api2/{project}/" +
+                            ('y' if dirs else 'n'),
+                            cookies=session.cookies,
+                            params={"cd": root})
+
+    try:
+        return json.loads(response.text)
+    except json.decoder.JSONDecodeError:
+        raise GsportError("[get_listing] Error reading response:", response.text)
+
+
+def print_listing(session):
     if session.options.recursive:
-        response = requests.get(session.options.host + '/data_api_recursive/' +
-                                session.options.project,
-                                cookies=session.cookies,
-                                params={"cd": session.options.dir})
-        try:
-            datafiles = json.loads(response.text)
-            print_rec(datafiles["children"], 0)
-        except json.decoder.JSONDecodeError:
-            print("[get_listing] Error reading response:", response.text)
-            exit(1)
+        file_tree = get_listing_recursive(
+            session=session,
+            project=session.options.project,
+            root=session.options.dir
+        )
+
+        print_rec(file_tree, 0)
+
     else:
-        response = requests.get(session.options.host + '/data_api2/' +
-                                session.options.project +
-                                ('/y' if session.options.dirs is True else '/n'),
-                                cookies=session.cookies,
-                                params={"cd": session.options.dir})
-        try:
-            datafiles = json.loads(response.text)
-            for file in datafiles:
-                print(file['name'])
-        except json.decoder.JSONDecodeError:
-            print("[get_listing] Error reading response:", response.text)
-            exit(1)
+        data_files = get_listing(
+            session=session,
+            project=session.options.project,
+            dirs=session.options.dirs,
+            root=session.options.dir
+        )
+
+        for entry in data_files:
+            print(entry['name'])
 
 
 def download(session):
@@ -482,7 +500,7 @@ def main():
     if options.clear_cookies:
         session.logout()
     if options.listing:
-        get_listing(session)
+        print_listing(session)
     if options.download:
         download(session)
     if options.download_all:
