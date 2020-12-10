@@ -3,7 +3,9 @@ GSPORT command-line tool for accessing GenomeScan Customer Portal
 ---
 (C) GenomeScan B.V. 2019
 (C) GenomeScan B.V. 2020 - Update
+
 N.J. de Water - Software Developer
+Joost Kranendonk - HZPC Research BV
 """
 
 from getpass import getpass
@@ -20,7 +22,7 @@ import platform
 import os
 
 
-GSPORT_VERSION = "1.6.2"
+GSPORT_VERSION = "2.0.0b"
 
 
 def version():
@@ -41,10 +43,10 @@ Options
 -c --clear-cookies clear session/cookies
 -t --workers [n] allow n concurrent workers (defaults to number of logical cpu cores) (works only on Linux)
    --dirs show directories instead of files (combined with -l or --list)
-   --cd [dir] show files (or directories) in dir, 
+   --cd [dir] show files (or directories) in dir,
               dirs can be appended with forward slashes: / (eg. "Analysis/Sample 1", with quotes)
               or Analysis/s1/bam (without spaces, no quotes needed)
--r --recursive lists/downloads complete tree from --cd [dir] or everything if no --cd option is given 
+-r --recursive lists/downloads complete tree from --cd [dir] or everything if no --cd option is given
 -h --help prints this help
 -v --version show gsport version
 
