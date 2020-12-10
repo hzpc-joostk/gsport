@@ -25,6 +25,14 @@ import os
 GSPORT_VERSION = "2.0.0b"
 
 
+class GsportError(Exception):
+    pass
+
+
+class LoginError(GsportError):
+    pass
+
+
 def version():
     print(GSPORT_VERSION)
 
@@ -165,8 +173,13 @@ class Options:
 class Session:
     def __init__(self, options):
         self.options = options
+
         self.cookies = http.cookiejar.MozillaCookieJar(filename=os.path.join(str(Path.home()), '.gs_cookies.txt'))
         self.logged_in = False
+        self._session = None
+        self._username = None
+        self._csrftoken = None
+
         self.queue = Queue()
         self.process = Queue()
 
@@ -175,49 +188,58 @@ class Session:
             if json.loads(requests.get(options.host + '/logged_in_api/', cookies=self.cookies).text)['logged_in']:
                 self.logged_in = True
             else:
-                self.login()
-        except FileNotFoundError:
-            print("[session] No cookies found. Logging in...")
-            self.login()
+                raise LoginError
+        except (FileNotFoundError, LoginError):
+            print("[session] login required!")
 
-    def login(self):
-        print("[login] Opening session...")
+    def login(self, username, password):
+        if self._session is not None:
+            raise RuntimeError("ongoing login!")
+
         session = requests.Session()
-        session.cookies = http.cookiejar.MozillaCookieJar(os.path.join(str(Path.home()), '.gs_cookies.txt'))
-        print("[login] Get login page")
-        response = session.get(self.options.host + "/login/")
+        session.cookies = self.cookies
+
+        login_url = self.options.host + "/login/"
+        response = session.get(login_url)
         csrftoken = response.cookies['csrftoken']
 
-        username = ''
-        first_try = True
-        while re.search('name="password"', response.text) is not None or first_try:
-            if not first_try:
-                print("[login] Invalid credentials")
-            first_try = False
-            username = input("Username: ")
-            login_data = dict(username=username, password=getpass("Password: "), csrfmiddlewaretoken=csrftoken,
-                              next='/')
-            response = session.post(self.options.host + "/login/", data=login_data,
-                                    headers=dict(Referer=self.options.host + "/login/"))
+        login_data = {
+            "username": username,
+            "password": password,
+            "csrfmiddlewaretoken": csrftoken,
+            "next": '/'
+        }
+        response = session.post(login_url, data=login_data, headers={"Referer": login_url})
 
-        csrftoken = re.search('name="csrfmiddlewaretoken" value="(.+)"', response.text).group(1)
+        if re.search('name="password"', response.text) is not None:
+            raise LoginError("invalid credentials")
 
-        first_try = True
-        while re.search('name="csrfmiddlewaretoken" value="(.+)"', response.text) is not None or first_try:
-            if not first_try:
-                print("[login]", "Invalid token")
-            first_try = False
-            login_data = dict(token=input("Token: "), username=username, csrfmiddlewaretoken=csrftoken, next='/')
-            response = session.post(self.options.host + "/otp_ok/", data=login_data,
-                                    headers={"Referer": self.options.host + "/login/",
-                                             "User-Agent": "gsport " + GSPORT_VERSION
-                                             })
+        self._session = session
+        self._username = username
+        self._csrftoken = re.search('name="csrfmiddlewaretoken" value="(.+)"', response.text).group(1)
 
-        print("[login] Success, saving cookies...")
-        session.cookies.save(ignore_discard=True)
+    def put_token(self, token):
+        login_data = {
+            "username": self._username,
+            "token": token,
+            "csrfmiddlewaretoken": self._csrftoken,
+            "next": '/'
+        }
 
-        print("[login] Done.")
-        self.cookies = session.cookies
+        response = self._session.post(
+            self.options.host + "/otp_ok/", data=login_data,
+                                headers={"Referer": self.options.host + "/login/",
+                                        "User-Agent": "gsport " + GSPORT_VERSION
+                                        })
+
+        if re.search('name="csrfmiddlewaretoken" value="(.+)"', response.text) is not None:
+            raise LoginError("invalid token")
+
+        del self._session
+        del self._csrftoken
+
+        self._session.cookies.save(ignore_discard=True)
+        self.cookies = self._session.cookies
         self.logged_in = True
 
     def download_file(self, url, fsize, fname):
@@ -233,7 +255,7 @@ class Session:
                 else:
                     self.options.dir = '.'
                 with open(fname, 'wb') as f:
-                    for chunk in r.iter_content(chunk_size=8192):
+                    for chunk in r.iter_content(chunk_size=8*1024*1024):
                         if chunk:  # filter out keep-alive new chunks
                             f.write(chunk)
                             dsize += len(chunk)
@@ -447,6 +469,16 @@ def download_all(session):
 def main():
     options = Options(sys.argv)
     session = Session(options)
+
+    if not session.logged_in:
+        session.login(
+            username=input("Username: "),
+            password=getpass("Password: ")
+        )
+        session.put_token(
+            token=input("Token: ")
+        )
+
     if options.clear_cookies:
         session.logout()
     if options.listing:
