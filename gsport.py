@@ -243,11 +243,16 @@ class Session:
         self.cookies = self._session.cookies
         self.logged_in = True
 
+    @contextmanager
+    def download_stream(self, url):
+        with requests.get(url, stream=True, cookies=self.cookies) as res:
+            yield res
+
     def download_file(self, url, fsize, fname):
         try:
             dsize = 0
             start = time.time()
-            with requests.get(url, stream=True, cookies=self.cookies) as r:
+            with self.download_stream(url) as r:
                 self.options.dir = '/'.join(self.options.dir.split('/')[:-1])
 
                 if self.options.dir != '':
@@ -339,6 +344,23 @@ def print_listing(session):
 
         for entry in data_files:
             print(entry['name'])
+
+
+def download_stream(session, project, filename, root="."):
+    params = {
+        "project": project,
+        "filename": f"/{root}/{filename}"
+    }
+
+    response = requests.get(
+        url=f"{session.options.host}/gen_session_file/{project}/",
+        params=params,
+        cookies=session.cookies
+    )
+
+    return session.download_stream(
+        url=f"{session.options.host}/session_files2/{project}/{response.text}"
+    )
 
 
 def download(session):
