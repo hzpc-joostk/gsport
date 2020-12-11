@@ -8,19 +8,20 @@ N.J. de Water - Software Developer
 Joost Kranendonk - HZPC Research BV
 """
 
+import getopt
+import http.cookiejar
+import json
+import os
+import platform
+import re
+import sys
+import time
+from contextlib import contextmanager
 from getpass import getpass
 from multiprocessing import Process, Queue
 from pathlib import Path
-import http.cookiejar
-import requests
-import getopt
-import sys
-import re
-import json
-import time
-import platform
-import os
 
+import requests
 
 GSPORT_VERSION = "2.0.0b"
 
