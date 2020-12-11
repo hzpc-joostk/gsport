@@ -30,7 +30,7 @@ class GsportError(Exception):
     pass
 
 
-class LoginError(GsportError):
+class SessionError(GsportError):
     pass
 
 
@@ -189,8 +189,8 @@ class Session:
             if json.loads(requests.get(options.host + '/logged_in_api/', cookies=self.cookies).text)['logged_in']:
                 self.logged_in = True
             else:
-                raise LoginError
-        except (FileNotFoundError, LoginError):
+                raise SessionError
+        except (FileNotFoundError, SessionError):
             print("[session] login required!")
 
     def login(self, username, password):
@@ -213,7 +213,7 @@ class Session:
         response = session.post(login_url, data=login_data, headers={"Referer": login_url})
 
         if re.search('name="password"', response.text) is not None:
-            raise LoginError("invalid credentials")
+            raise SessionError("invalid credentials")
 
         self._session = session
         self._username = username
@@ -234,7 +234,7 @@ class Session:
                                         })
 
         if re.search('name="csrfmiddlewaretoken" value="(.+)"', response.text) is not None:
-            raise LoginError("invalid token")
+            raise SessionError("invalid token")
 
         del self._session
         del self._csrftoken
@@ -285,7 +285,7 @@ class Session:
         if response.status_code == 200:
             print("[logout] Logged out.")
         else:
-            print("[logout] Error logging out.")
+            raise SessionError("Error logging out.")
 
 
 def print_rec(dic, depth):
