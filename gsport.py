@@ -8,6 +8,7 @@ N.J. de Water - Software Developer
 Joost Kranendonk - HZPC Research BV
 """
 
+import functools
 import getopt
 import http.cookiejar
 import json
@@ -242,6 +243,17 @@ class Session:
         self.cookies = self._session.cookies
         self.logged_in = True
 
+    def get_file(self, project, filepath, stream=True, **kwargs):
+        params = {
+            "project": str(project),
+            "filename": filepath
+        }
+
+        response = self.get("gen_session_file/", params=params)
+        file_id = response.text
+
+        return self.get(f"session_files2/{project}/{file_id}", stream=stream)
+
     def get(self, path, **kwargs):
         """Put a GET request on the session's cookies and remote host."""
         path = path.lstrip("/")
@@ -368,21 +380,54 @@ def print_listing(session):
             print(entry['name'])
 
 
-def download_stream(session, project, filename, root="."):
+def get_absolute_path(filename, root="."):
     if isinstance(filename, dict):
-        filepath = "/" + filename["path"]
+        filepath = filename["path"]
+
+        if filepath.startswith("./"):
+            filepath = filepath[1:]
+
+        elif not filepath.startswith("/"):
+            filepath = "/" + filepath
+
     else:
         filepath = f"/{root}/{filename}"
+    
+    return filepath
 
-    params = {
-        "project": str(project),
-        "filename": filepath
-    }
 
-    response = session.get("gen_session_file/", params=params)
-    file_id = response.text
+def download_stream(session, project, filename, root="."):
+    filepath = get_absolute_path(filename, root)
+    response = session.get_file(project, filepath, stream=True)
 
-    return session.get(f"session_files2/{project}/{file_id}", stream=True)
+    return response
+
+
+def stream_blob_storage(session, project, filename, root=".", chunk_size=4*1024*1024,
+                        container_client=None, blob_client=None, blob_name=None):
+
+    if (container_client is None) == (blob_client is None):
+        raise TypeError("either `container_client` or `blob_client`")
+
+    filepath = get_absolute_path(filename, root)
+
+    if container_client is not None:
+        if blob_name is None:
+            blob_name = filepath.lstrip("/")
+
+        upload_blob = functools.partial(
+            container_client.upload_blob,
+            name=blob_name
+        )
+    
+    else:
+        upload_blob = blob_client.upload_blob
+
+    with session.get_file(project, filepath, stream=True) as response:
+        stream = response.raw
+        length = stream.length_remaining
+
+        return upload_blob(data=stream, length=length)
 
 
 def download(session):
