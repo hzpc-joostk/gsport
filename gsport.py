@@ -16,7 +16,6 @@ import platform
 import re
 import sys
 import time
-from contextlib import contextmanager
 from getpass import getpass
 from multiprocessing import Process, Queue
 from pathlib import Path
@@ -243,10 +242,16 @@ class Session:
         self.cookies = self._session.cookies
         self.logged_in = True
 
-    @contextmanager
+    def get(self, path, **kwargs):
+        """Put a GET request on the session's cookies and remote host."""
+        path = path.lstrip("/")
+        url = f"{self.options.host}/{path}"
+        cookies = kwargs.get("cookies", self.cookies)
+
+        return requests.get(url,  cookies=cookies, **kwargs)
+
     def download_stream(self, url):
-        with requests.get(url, stream=True, cookies=self.cookies) as res:
-            yield res
+        return requests.get(url, stream=True, cookies=self.cookies)
 
     def download_file(self, url, fsize, fname):
         try:
@@ -364,20 +369,20 @@ def print_listing(session):
 
 
 def download_stream(session, project, filename, root="."):
+    if isinstance(filename, dict):
+        filepath = "/" + filename["path"]
+    else:
+        filepath = f"/{root}/{filename}"
+
     params = {
-        "project": project,
-        "filename": f"/{root}/{filename}"
+        "project": str(project),
+        "filename": filepath
     }
 
-    response = requests.get(
-        url=f"{session.options.host}/gen_session_file/{project}/",
-        params=params,
-        cookies=session.cookies
-    )
+    response = session.get("gen_session_file/", params=params)
+    file_id = response.text
 
-    return session.download_stream(
-        url=f"{session.options.host}/session_files2/{project}/{response.text}"
-    )
+    return session.get(f"session_files2/{project}/{file_id}", stream=True)
 
 
 def download(session):
