@@ -321,6 +321,9 @@ def print_rec(dic, depth):
 def add_filepath(entries, root, inplace=True):
     assert inplace
 
+    if root == ".":
+        root = ""
+
     for entry in entries:
         name = entry["name"]
         entry["path"] = f"{root}/{name}"
@@ -391,8 +394,11 @@ def get_absolute_path(filename, root="."):
             filepath = "/" + filepath
 
     else:
-        filepath = f"/{root}/{filename}"
-    
+        if root == ".":
+            root = ""
+
+        filepath = f"{root}/{filename}"
+
     return filepath
 
 
