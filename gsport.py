@@ -418,9 +418,23 @@ def iterator_copy_callback(iterator, callback):
         yield item
 
 
+def parse_checksums(session, project, filename, root="."):
+    """Parse the MD5 checkum file."""
+    with download_stream(session, project, filename, root) as response:
+        data = response.text
+
+    checksums = dict()
+
+    for entry in data.splitlines():
+        md5, name = entry.split("  ", 1)
+        checksums[name] = bytes.fromhex(md5)
+
+    return checksums
+
+
 def stream_blob_storage(session, project, filename, root=".", chunk_size=1024*1024,
                         container_client=None, blob_client=None, blob_name=None):
-    """Stream a file from GenomeScan Portal directly to Azure Blob Storage."""
+    """Stream a file from GenomeScan Portal to Azure Blob Storage."""
 
     filepath = get_absolute_path(filename, root)
 
@@ -431,15 +445,29 @@ def stream_blob_storage(session, project, filename, root=".", chunk_size=1024*10
             # retain the GenomeScan directory structure by default
             blob_name = filepath.lstrip("/")
 
-        blob_client = container_client.get_blob_client(blob_name)    
+        blob_client = container_client.get_blob_client(blob_name)
 
     with session.get_file(project, filepath, stream=True) as response:
         stream = response.raw
         length = stream.length_remaining
 
         blob_client.upload_blob(data=stream, length=length)
-    
+
     return blob_client
+
+
+def verify_blob_md5(blob_client, checksums):
+    props = blob_client.get_blob_properties()
+    blob_name = props["name"]
+    blob_md5 = props["content_settings"].get("content_md5")
+
+    if not blob_md5:
+        return None
+    
+    if blob_name not in checksums:
+        return None
+    
+    return checksums[blob_name] == blob_md5
 
 
 def download(session):
