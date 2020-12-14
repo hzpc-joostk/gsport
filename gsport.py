@@ -219,7 +219,7 @@ class Session:
         self._username = username
         self._csrftoken = re.search('name="csrfmiddlewaretoken" value="(.+)"', response.text).group(1)
 
-    def put_token(self, token):
+    def login_token(self, token):
         login_data = {
             "username": self._username,
             "token": token,
@@ -236,12 +236,12 @@ class Session:
         if re.search('name="csrfmiddlewaretoken" value="(.+)"', response.text) is not None:
             raise SessionError("invalid token")
 
-        del self._session
-        del self._csrftoken
-
         self._session.cookies.save(ignore_discard=True)
         self.cookies = self._session.cookies
         self.logged_in = True
+
+        del self._session
+        del self._csrftoken
 
     def get_file(self, project, filepath, stream=True, **kwargs):
         params = {
@@ -623,7 +623,7 @@ def main():
             username=input("Username: "),
             password=getpass("Password: ")
         )
-        session.put_token(
+        session.login_token(
             token=input("Token: ")
         )
 
