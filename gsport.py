@@ -301,27 +301,44 @@ def print_rec(dic, depth):
             print("├──", item["name"], 'Size: ', item['size'], 'bytes')
 
 
+def add_filepath(entries, root, inplace=True):
+    assert inplace
+
+    for entry in entries:
+        name = entry["name"]
+        entry["path"] = f"{root}/{name}"
+
+        if entry.get("type") == "directory":
+            add_filepath(entry["children"], entry["path"], inplace=True)
+
+    return entries
+
+
 def get_listing_recursive(session, project, root="."):
     response = requests.get(f"{session.options.host}/data_api_recursive/{project}",
                             cookies=session.cookies,
                             params={"cd": root})
 
     try:
-        return json.loads(response.text)["children"]
+        entries = json.loads(response.text)["children"]
     except json.decoder.JSONDecodeError:
         raise GsportError("[get_listing] Error reading response:", response.text)
+
+    return add_filepath(entries, root)
 
 
 def get_listing(session, project, dirs=False, root="."):
     response = requests.get(f"{session.options.host}/data_api2/{project}/" +
-                            ('y' if dirs else 'n'),
+                            ("y" if dirs else "n"),
                             cookies=session.cookies,
                             params={"cd": root})
 
     try:
-        return json.loads(response.text)
+        entries = json.loads(response.text)
     except json.decoder.JSONDecodeError:
         raise GsportError("[get_listing] Error reading response:", response.text)
+
+    return add_filepath(entries, root)
 
 
 def print_listing(session):
