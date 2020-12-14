@@ -403,31 +403,37 @@ def download_stream(session, project, filename, root="."):
     return response
 
 
-def stream_blob_storage(session, project, filename, root=".", chunk_size=4*1024*1024,
-                        container_client=None, blob_client=None, blob_name=None):
+def iterator_copy_callback(iterator, callback):
+    """Intended for updating a hasher (e.g. `hashlib.md5().update`) while consuming
+    the items in another loop (e.g. uploading into Azure Blob Storage).
+    """
+    for item in iterator:
+        callback(item)
+        yield item
 
-    if (container_client is None) == (blob_client is None):
-        raise TypeError("either `container_client` or `blob_client`")
+
+def stream_blob_storage(session, project, filename, root=".", chunk_size=1024*1024,
+                        container_client=None, blob_client=None, blob_name=None):
+    """Stream a file from GenomeScan Portal directly to Azure Blob Storage."""
 
     filepath = get_absolute_path(filename, root)
 
-    if container_client is not None:
+    if blob_client is None:
+        assert container_client is not None
+
         if blob_name is None:
+            # retain the GenomeScan directory structure by default
             blob_name = filepath.lstrip("/")
 
-        upload_blob = functools.partial(
-            container_client.upload_blob,
-            name=blob_name
-        )
-    
-    else:
-        upload_blob = blob_client.upload_blob
+        blob_client = container_client.get_blob_client(blob_name)    
 
     with session.get_file(project, filepath, stream=True) as response:
         stream = response.raw
         length = stream.length_remaining
 
-        return upload_blob(data=stream, length=length)
+        blob_client.upload_blob(data=stream, length=length)
+    
+    return blob_client
 
 
 def download(session):
