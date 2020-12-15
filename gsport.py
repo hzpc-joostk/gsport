@@ -313,17 +313,57 @@ class Session:
             raise SessionError("Error logging out.")
 
 
-def print_rec(dic, depth):
-    for item in dic:
-        if item['type'] == 'directory':
-            for i in range(depth*2):
-                print("  ", end='')
-            print("└──", item["name"])
-            print_rec(item['children'], depth+1)
-        else:
-            for i in range(depth*2):
-                print("  ", end='')
-            print("├──", item["name"], 'Size: ', item['size'], 'bytes')
+# prefix components:
+space =  '    '
+branch = '│   '
+# pointers:
+tee =    '├── '
+last =   '└── '
+
+
+def generate_tree(nodes, prefix: str='', sizes=False, human=False, depth=-1):
+    """A recursive file tree generator.
+
+    Given a node, will yield a visual tree structure line by line
+    with each line prefixed by the same characters.
+
+    inspired by https://stackoverflow.com/a/59109706/4998990
+    """
+    if not depth:
+        # requested depth achieved, stop recursion
+        return
+    
+    # prefix pointers that are ├── with a final └──
+    pointers = [tee] * (len(nodes) - 1) + [last]
+
+    for pointer, node in zip(pointers, nodes):
+        size = node.get("size", "")
+        name = node["name"]
+
+        if (sizes or human) and size:
+            if human:
+                size = human_bytes(size)
+                size = f"[{size:>4}]  "
+            else:
+                size = f"[{size:>10}]  "
+
+        yield f"{prefix}{pointer}{size}{name}"
+
+        if "children" in node:  # extend the prefix and recurse:
+            extension = branch if pointer == tee else space
+            # i.e. space because last, └── , above so no more |
+            yield from generate_tree(
+                node["children"],
+                prefix=prefix + extension,
+                sizes=sizes,
+                human=human,
+                depth=depth - 1
+            )
+
+
+def print_tree(parent, sizes=False, human=False, depth=-1):
+    for line in generate_tree(parent, sizes=sizes, human=human, depth=depth):
+        print(line)
 
 
 def add_filepath(entries, root, inplace=True):
@@ -377,7 +417,7 @@ def print_listing(session):
             root=session.options.dir
         )
 
-        print_rec(file_tree, 0)
+        print_tree(file_tree, sizes=True, human=True)
 
     else:
         data_files = get_listing(
