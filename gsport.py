@@ -456,18 +456,24 @@ def stream_blob_storage(session, project, filename, root=".", chunk_size=1024*10
     return blob_client
 
 
-def verify_blob_md5(blob_client, checksums):
-    props = blob_client.get_blob_properties()
-    blob_name = props["name"]
-    blob_md5 = props["content_settings"].get("content_md5")
+def verify_blob_md5(blob_client, checksum, do_set=False):
+    """Verify or set MD5 checksum on Azure Blob data.
+    
+    If the blob's `content_md5` is available, compare it (assumes binary MD5).
+    If not available, but `do_set` is True, set it (use with CAUTION).
+    """
+    if not checksum:
+        return None
 
-    if not blob_md5:
-        return None
-    
-    if blob_name not in checksums:
-        return None
-    
-    return checksums[blob_name] == blob_md5
+    conset = blob_client.get_blob_properties()["content_settings"]
+    blob_md5 = conset["content_md5"]
+
+    if blob_md5:
+        return checksum == blob_md5
+
+    if do_set:
+        conset["content_md5"] = checksum
+        blob_client.set_http_headers(content_settings=conset)
 
 
 def download(session):
