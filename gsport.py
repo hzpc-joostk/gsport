@@ -85,12 +85,20 @@ def human_readable_eta(seconds):
     return ret
 
 
-def sizeofmetric_fmt(num, suffix='B'):
+def human_bytes(num, suffix=''):
     for unit in ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z']:
-        if abs(num) < 1000.0:
-            return "%3.1f %s%s" % (num, unit, suffix)
-        num /= 1000.0
-    return "%.1f %s%s" % (num, 'Y', suffix)
+        if abs(num) < 10.0 and unit:
+            return f"{num:.1f}{unit}{suffix}"
+
+        if abs(num) < 1024.0:
+            return f"{num:.0f}{unit}{suffix}"
+
+        num /= 1024.0
+
+    if abs(num) < 10.0:
+        return f"{num:.1f}{unit}{suffix}"
+
+    return f"{num:.0f}{unit}{suffix}"
 
 
 class Options:
@@ -110,7 +118,7 @@ class Options:
         self.recursive = False
 
         try:
-            opts, args = getopt.getopt(argv[1:],
+            opts, _ = getopt.getopt(argv[1:],
                                        "H:p:ld:achrvt:",
                                        ["host=", "project=", "list",
                                         "download=", "download-all", "threads", "version"
@@ -284,9 +292,9 @@ class Session:
                             dsize += len(chunk)
                             rate = dsize // (time.time() - start)
                             if not self.options.download_all:
-                                print("\r" + sizeofmetric_fmt(fsize) + " " +
+                                print("\r" + human_bytes(fsize) + " " +
                                       str(round(dsize / fsize * 100)) + "% " +
-                                      str(sizeofmetric_fmt(rate)) + "/sec ",
+                                      str(human_bytes(rate)) + "/sec ",
                                       "ETA:", human_readable_eta((fsize - dsize) / rate),
                                       end='     ')
                             else:
@@ -458,7 +466,7 @@ def stream_blob_storage(session, project, filename, root=".", chunk_size=1024*10
 
 def verify_blob_md5(blob_client, checksum, do_set=False):
     """Verify or set MD5 checksum on Azure Blob data.
-    
+
     If the blob's `content_md5` is available, compare it (assumes binary MD5).
     If not available, but `do_set` is True, set it (use with CAUTION).
     """
@@ -610,9 +618,9 @@ def download_all(session):
         rate = downloaded_bytes // (time.time() - start)
         if dl_sum > 100:  # preventing devision by zero errors
             print("\r", str(round(downloaded_bytes / dl_sum * 100))+"%",
-                  "Downloading", sizeofmetric_fmt(downloaded_bytes), "of",
-                  sizeofmetric_fmt(dl_sum),
-                  str(sizeofmetric_fmt(rate)) + "/sec",
+                  "Downloading", human_bytes(downloaded_bytes), "of",
+                  human_bytes(dl_sum),
+                  str(human_bytes(rate)) + "/sec",
                   "ETA:", human_readable_eta((dl_sum - downloaded_bytes) / rate),
                   end='     ')
         if finished_processes == number_of_processes:
